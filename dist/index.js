@@ -16,6 +16,20 @@ const uri = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const COOKIE_NAME = "zenboard_token";
 const isProd = process.env.NODE_ENV === "production";
+app.use((req, res, next) => {
+    const csp = [
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*",
+        "object-src 'none'",
+        "base-uri 'self'",
+    ].join("; ");
+    res.setHeader("Content-Security-Policy", csp);
+    next();
+});
 app.use((0, cors_1.default)({
     origin: process.env.CLIENT_URL || "http://localhost:3000",
     credentials: true,
@@ -62,6 +76,13 @@ const ensureDb = (res) => {
     }
     return true;
 };
+app.get("/users", async (_req, res) => {
+    if (!ensureDb(res))
+        return;
+    const cursor = userCollection.find({});
+    const users = await cursor.toArray();
+    res.json(users);
+});
 async function run() {
     try {
         await client.connect();
@@ -315,6 +336,9 @@ async function run() {
             priorityDistribution: priorityAgg,
             velocity: velocityAgg,
         });
+    });
+    app.get("/.well-known/appspecific/com.chrome.devtools.json", (_req, res) => {
+        res.json({});
     });
     app.get("/", (_req, res) => {
         res.send("ZenBoard server is running");

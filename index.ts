@@ -12,6 +12,22 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const COOKIE_NAME = "zenboard_token";
 const isProd = process.env.NODE_ENV === "production";
 
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const csp = [
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ].join("; ");
+
+  res.setHeader("Content-Security-Policy", csp);
+  next();
+});
+
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:3000",
@@ -40,6 +56,7 @@ interface AuthRequest extends Request {
 }
 
 let isDbConnected = false;
+
 let userCollection: any = null;
 let taskCollection: any = null;
 let commentCollection: any = null;
@@ -79,6 +96,14 @@ const ensureDb = (res: Response): boolean => {
   return true;
 };
 
+app.get("/users", async (_req: Request, res: Response) => {
+  if (!ensureDb(res)) return;
+
+  const cursor = userCollection.find({});
+  const users = await cursor.toArray();
+  res.json(users);
+});
+
 async function run(): Promise<void> {
   try {
     await client.connect();
@@ -89,7 +114,6 @@ async function run(): Promise<void> {
     commentCollection = database.collection("comments");
     notificationCollection = database.collection("notifications");
     isDbConnected = true;
-
     console.log("MongoDB connected successfully!");
   } catch (error) {
     console.error("MongoDB connection failed:", error);
@@ -386,6 +410,10 @@ async function run(): Promise<void> {
       priorityDistribution: priorityAgg,
       velocity: velocityAgg,
     });
+  });
+
+  app.get("/.well-known/appspecific/com.chrome.devtools.json", (_req: Request, res: Response) => {
+    res.json({});
   });
 
   app.get("/", (_req: Request, res: Response) => {
